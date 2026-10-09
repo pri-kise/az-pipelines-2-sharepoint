@@ -65,6 +65,17 @@ function isReadable(value: unknown): boolean {
     return isNodeReadable(value) || isWebReadable(value);
 }
 
+function isBytes(value: unknown): boolean {
+    return Buffer.isBuffer(value) || value instanceof Uint8Array;
+}
+
+/**
+ * A response body as the Graph client throws it: a stream, or bytes for a buffered response.
+ */
+function isBody(value: unknown): boolean {
+    return isReadable(value) || isBytes(value);
+}
+
 function isGraphError(value: any): boolean {
     return value instanceof Error && typeof (value as any).statusCode === 'number';
 }
@@ -85,6 +96,10 @@ function waitAtMost(promise: Promise<void>, milliseconds: number): Promise<void>
  * native fetch of Node 18+). Gives up after a few seconds and returns what arrived until then.
  */
 async function readBody(stream: any): Promise<string> {
+    if (isBytes(stream)) {
+        return Buffer.from(stream).subarray(0, maxBodyBytes).toString('utf8');
+    }
+
     const chunks: Buffer[] = [];
     let size = 0;
     const add = (chunk: unknown) => {
@@ -253,7 +268,7 @@ async function describeError(error: unknown): Promise<ErrorDescription> {
         let isErrorPage = false;
         let details: string | undefined;
 
-        if (isReadable(error)) {
+        if (isBody(error)) {
             text = summarizeBody(await readBody(error));
             isErrorPage = true;
         } else if (isGraphError(error)) {
@@ -263,7 +278,7 @@ async function describeError(error: unknown): Promise<ErrorDescription> {
             requestId = graphError.requestId ?? undefined;
             if (graphError.message) {
                 text = graphError.message;
-            } else if (isReadable(graphError.body)) {
+            } else if (isBody(graphError.body)) {
                 text = summarizeBody(await readBody(graphError.body));
                 isErrorPage = true;
             } else if (typeof graphError.body === 'string') {
@@ -286,11 +301,11 @@ async function describeError(error: unknown): Promise<ErrorDescription> {
         }
 
         text = collapseWhitespace(redactSecrets(text));
-        const isNetworkError = status === undefined && (code === 'FetchError' || networkErrorPattern.test(text));
+        const isNetworkError = status === undefined && (code === 'FetchError' || code === 'NetworkError' || networkErrorPattern.test(text));
 
         const parts: string[] = [];
         if (status !== undefined) parts.push(`HTTP ${status}`);
-        if (code && !/^(Error|TypeError|FetchError)$/.test(code) && text.indexOf(code) === -1) parts.push(code);
+        if (code && !/^(Error|TypeError|FetchError|NetworkError)$/.test(code) && text.indexOf(code) === -1) parts.push(code);
         let message = parts.join(' ');
 
         if (text === '') {

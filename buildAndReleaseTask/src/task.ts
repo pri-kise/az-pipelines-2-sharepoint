@@ -81,7 +81,8 @@ async function runTaskAsync(inputs?: TaskInputs, logger?: ILogger): Promise<{
             clientSecret: inputs.clientSecret,
             tenantId: inputs.tenantId
         },
-        conflictBehaviour: inputs.conflictBehaviour
+        conflictBehaviour: inputs.conflictBehaviour,
+        maxRetries: inputs.maxRetries
     }, logger);
 
     try {

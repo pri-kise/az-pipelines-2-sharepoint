@@ -10,6 +10,8 @@ import { driveItemUrl, folderChildrenUrl, joinDrivePath } from "./drive-paths";
 interface UploaderOptions {
     auth: AuthOptions;
     conflictBehaviour: ConflictBehaviour;
+    /** Retries on temporary errors; the client's default when not set. */
+    maxRetries?: number;
 }
 
 class Uploader {
@@ -31,7 +33,10 @@ class Uploader {
             return this._client;
         }
 
-        const client = createClient(this._options.auth);
+        const client = createClient(this._options.auth, {
+            retry: { maxRetries: this._options.maxRetries },
+            logger: this._logger
+        });
 
         this._client = client;
         return client;
